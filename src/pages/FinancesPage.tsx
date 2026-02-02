@@ -1,6 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Wallet, TrendingUp, TrendingDown, PieChart, ArrowLeftRight, Search, Filter } from "lucide-react";
+import { 
+  Wallet, 
+  TrendingUp, 
+  TrendingDown, 
+  PieChart, 
+  ArrowLeftRight, 
+  Search, 
+  Filter, 
+  ChevronDown, 
+  ChevronUp 
+} from "lucide-react";
 import { format } from "date-fns";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -13,7 +23,22 @@ import { DateRangeSelector, DateRange, getDefaultDateRange } from "@/components/
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { sql } from "@/lib/neon"; // Conexão Neon
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { sql } from "@/lib/neon";
+
+const CATEGORIES = [
+  "Todas",
+  "Lazer",
+  "Alimentação",
+  "Despesa fixa",
+  "Despesa variável",
+  "Transporte",
+  "Saúde",
+  "Educação",
+  "Investimento",
+  "Moradia",
+  "Outros"
+];
 
 interface FinanceData {
   balance: number;
@@ -25,7 +50,8 @@ interface FinanceData {
 
 export default function FinancesPage() {
   const { user } = useAuth();
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30)); // Padrão 30 dias para ver mais dados
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30));
+  
   const [data, setData] = useState<FinanceData>({
     balance: 0,
     totalIncome: 0,
@@ -36,16 +62,18 @@ export default function FinancesPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Todas");
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+
   useEffect(() => {
     async function fetchData() {
       if (!user) return;
-
       try {
         setLoading(true);
         const startDate = format(dateRange.from, "yyyy-MM-dd");
         const endDate = format(dateRange.to, "yyyy-MM-dd");
 
-        // QUERY SQL NEON
         const finances = await sql`
           SELECT * FROM finances 
           WHERE user_id = ${user.id} 
@@ -64,7 +92,6 @@ export default function FinancesPage() {
 
         const balance = totalIncome - totalExpenses;
 
-        // Categorias
         const categoryMap = new Map<string, number>();
         finances
           .filter((f: any) => f.type === "expense")
@@ -78,10 +105,8 @@ export default function FinancesPage() {
           value,
         }));
 
-        // Gráfico Diário
         const dailyMap = new Map<string, { income: number; expense: number }>();
         finances.forEach((f: any) => {
-          // Garante que a data seja string YYYY-MM-DD
           const dateObj = new Date(f.transaction_date);
           const date = dateObj.toISOString().split('T')[0];
           
@@ -111,6 +136,22 @@ export default function FinancesPage() {
     fetchData();
   }, [user, dateRange]);
 
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((t) => {
+      const matchesSearch = 
+        t.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.category.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = selectedCategory === "Todas" || t.category === selectedCategory;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [transactions, searchTerm, selectedCategory]);
+
+  const displayedTransactions = showAllTransactions 
+    ? filteredTransactions 
+    : filteredTransactions.slice(0, 5);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -132,12 +173,12 @@ export default function FinancesPage() {
     <DashboardLayout>
       <PageHeader
         title="Finanças"
-        description="Gerencie seu fluxo de caixa"
+        description="Gerencie seu fluxo"
         icon={<Wallet className="h-6 w-6" />}
         actions={<DateRangeSelector value={dateRange} onChange={setDateRange} />}
       />
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid gap-4 grid-cols-1 sm:grid-cols-3">
         <MetricDisplay
           label="Saldo atual"
           value={formatCurrency(data.balance)}
@@ -158,9 +199,9 @@ export default function FinancesPage() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 mb-8">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2 mb-8">
         <motion.div
-          className="rounded-xl border bg-card p-6"
+          className="rounded-xl border bg-card p-4 sm:p-6 overflow-hidden" 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -169,11 +210,13 @@ export default function FinancesPage() {
             <ArrowLeftRight className="h-5 w-5 text-primary" />
             Fluxo de Transação
           </h3>
-          <TransactionFlowChart data={data.dailyData} />
+          <div className="h-[300px] w-full"> 
+             <TransactionFlowChart data={data.dailyData} />
+          </div>
         </motion.div>
 
         <motion.div
-          className="rounded-xl border bg-card p-6"
+          className="rounded-xl border bg-card p-4 sm:p-6 overflow-hidden"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -182,48 +225,101 @@ export default function FinancesPage() {
             <PieChart className="h-5 w-5 text-primary" />
             Gastos por categoria
           </h3>
-          <CategoryPieChart data={data.categoryData} />
+          <div className="h-[300px] w-full">
+            <CategoryPieChart data={data.categoryData} />
+          </div>
         </motion.div>
       </div>
 
       <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Histórico de Transações</CardTitle>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar..." className="pl-8 w-[200px]" />
-                </div>
-                <Button variant="outline" size="icon"><Filter className="h-4 w-4" /></Button>
+        <CardHeader className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <CardTitle>Histórico de Transações</CardTitle>
+            
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="w-full sm:w-[180px]">
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger>
+                    <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="relative flex-1 sm:flex-none">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar..." 
+                  className="pl-8 w-full sm:w-[200px]" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {transactions.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">Nenhuma transação encontrada neste período.</p>
-              ) : (
-                transactions.map((t: any) => (
-                  <div key={t.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
-                        {t.type === 'income' ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+          </div>
+        </CardHeader>
+        
+        <CardContent className="p-0 sm:p-6">
+          <div className="divide-y">
+            {filteredTransactions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Search className="h-10 w-10 mb-2 opacity-20" />
+                <p>Nenhuma transação encontrada.</p>
+              </div>
+            ) : (
+              <>
+                {displayedTransactions.map((t: any) => (
+                  <div key={t.id} className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className={`p-2 rounded-full shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                        {t.type === 'income' ? <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" /> : <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />}
                       </div>
-                      <div>
-                        <p className="font-medium">{t.description}</p>
-                        <p className="text-sm text-muted-foreground">{t.category} • {format(new Date(t.transaction_date), "dd/MM/yyyy")}</p>
+                      
+                      <div className="min-w-0"> 
+                        <p className="font-medium truncate max-w-[150px] sm:max-w-xs">{t.description || "Sem descrição"}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          {t.category} • {format(new Date(t.transaction_date), "dd/MM")}
+                        </p>
                       </div>
                     </div>
-                    <div className={`font-bold ${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    
+                    <div className={`font-bold text-sm sm:text-base whitespace-nowrap ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                       {t.type === 'income' ? '+' : '-'}{formatCurrency(Number(t.amount))}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+
+                {filteredTransactions.length > 5 && (
+                  <div className="p-4 border-t bg-muted/10 flex justify-center">
+                    <Button 
+                      variant="ghost" 
+                      className="gap-2 text-primary hover:text-primary/80"
+                      onClick={() => setShowAllTransactions(!showAllTransactions)}
+                    >
+                      {showAllTransactions ? (
+                        <>
+                          Mostrar menos <ChevronUp className="h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          Ver todas as transações ({filteredTransactions.length}) <ChevronDown className="h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </DashboardLayout>
   );
 }

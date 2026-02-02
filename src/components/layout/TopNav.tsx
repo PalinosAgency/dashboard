@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Target, Sun, Moon } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,12 +20,15 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 md:px-8">
+
         {/* Logo - Left */}
         <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Target className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-bold tracking-tight">Foca.Aí</span>
+          <img
+            src="/logo-icon-fundo.png"
+            alt="Foca.aí"
+            className="w-14 object-contain"
+          />
+          <span className="text-xl font-bold tracking-tight">Foca.aí</span>
         </Link>
 
         {/* Navigation - Center (hidden on mobile) */}
