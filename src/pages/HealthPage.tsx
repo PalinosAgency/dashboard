@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Heart, Droplets, Moon, Dumbbell, Scale, Plus } from "lucide-react"; // Adicionei o ícone Plus
+import { Heart, Droplets, Moon, Dumbbell, Scale } from "lucide-react";
 import { format } from "date-fns";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -12,8 +12,6 @@ import { SleepChart } from "@/components/health/SleepChart";
 import { HealthLog } from "@/components/health/HealthLog";
 import { WeightList } from "@/components/health/WeightList"; 
 import { DateRangeSelector, DateRange, getDefaultDateRange } from "@/components/ui/date-range-selector";
-import { Button } from "@/components/ui/button"; // Importei Button
-import { AddHealthDialog } from "@/components/health/AddHealthDialog"; // Importei o Dialog
 import { sql } from "@/lib/neon";
 
 interface HealthData {
@@ -24,7 +22,6 @@ interface HealthData {
   lastWeight: number | null;
   waterHistory: { date: string; value: number }[];
   sleepHistory: { date: string; value: number }[];
-  // Atualizei a interface para incluir unit e description
   workoutLog: { 
     id: string; 
     item: string; 
@@ -39,7 +36,6 @@ interface HealthData {
 export default function HealthPage() {
   const { user } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30));
-  const [isDialogOpen, setIsDialogOpen] = useState(false); // Estado para controlar o modal
   const [loading, setLoading] = useState(true);
   
   const [data, setData] = useState<HealthData>({
@@ -54,7 +50,6 @@ export default function HealthPage() {
     weightLog: [],
   });
 
-  // Extraí a função fetchData para poder chamá-la quando um novo item for adicionado
   async function fetchData() {
     if (!user) return;
 
@@ -111,7 +106,6 @@ export default function HealthPage() {
       const lastSleep = lastSleepRes.length ? Number(lastSleepRes[0].value) : null;
       const lastWeight = lastWeightRes.length ? Number(lastWeightRes[0].value) : null;
 
-      // Mapeamento atualizado para incluir description e unit
       const workoutLog = healthData
         .filter((h: any) => h.category === 'treino' || h.category === 'Treino')
         .map((h: any) => ({ 
@@ -119,7 +113,7 @@ export default function HealthPage() {
             item: h.item || "Treino", 
             description: h.description || null,
             value: Number(h.value), 
-            unit: h.unit || "min", // Valor padrão se estiver vazio
+            unit: h.unit || "min",
             date: new Date(h.calendario).toISOString().split('T')[0] 
         }))
         .reverse(); 
@@ -172,20 +166,7 @@ export default function HealthPage() {
         title="Saúde"
         description="Monitore seus hábitos diários"
         icon={<Heart className="h-6 w-6" />}
-        actions={
-          <div className="flex gap-2">
-            <DateRangeSelector value={dateRange} onChange={setDateRange} />
-            <Button onClick={() => setIsDialogOpen(true)} size="sm" className="gap-2">
-              <Plus className="h-4 w-4" /> Novo Registro
-            </Button>
-          </div>
-        }
-      />
-
-      <AddHealthDialog 
-        open={isDialogOpen} 
-        onOpenChange={setIsDialogOpen} 
-        onSuccess={fetchData} 
+        actions={<DateRangeSelector value={dateRange} onChange={setDateRange} />}
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
