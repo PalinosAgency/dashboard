@@ -18,12 +18,11 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Modificado: Agora verifica se o usuário existe.
-// Se não existir, mostra mensagem de bloqueio.
+// Modificado: Verifica se o usuário existe.
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
-  if (loading) return null; // O spinner global já está lidando com isso no AppRoutes
+  if (loading) return null; 
 
   if (!user) {
     return (
@@ -74,8 +73,6 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       
-      {/* Rota de Login removida conforme solicitado */}
-
       <Route
         path="/dashboard"
         element={
@@ -123,7 +120,8 @@ function AppRoutes() {
 }
 
 const App = () => (
-  <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+  // MODO CLARO FORÇADO
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} forcedTheme="light">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />

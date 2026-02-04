@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { 
   Wallet, TrendingUp, TrendingDown, ArrowLeftRight, 
   PieChart as PieChartIcon, Search, Filter,
-  ChevronDown
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
@@ -26,6 +26,9 @@ export default function FinancesPage() {
   const { user } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30));
   const [loading, setLoading] = useState(true);
+  
+  // Estado para controlar a exibição da lista ("Ver todas")
+  const [showAll, setShowAll] = useState(false);
 
   const [metrics, setMetrics] = useState({ income: 0, expenses: 0, balance: 0 });
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -85,6 +88,9 @@ export default function FinancesPage() {
     }
     fetchData();
   }, [user, dateRange]);
+
+  // Define quais transações serão exibidas com base no estado 'showAll'
+  const displayedTransactions = showAll ? transactions : transactions.slice(0, 5);
 
   return (
     <DashboardLayout>
@@ -239,33 +245,47 @@ export default function FinancesPage() {
           
           <div className="p-0">
             <div className="divide-y divide-slate-100">
-              {transactions.map((t: any) => (
-                <div key={t.id} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-default">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className={`p-2 rounded-full shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                      {t.type === 'income' ? <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" /> : <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />}
+              {displayedTransactions.length === 0 ? (
+                <p className="p-6 text-center text-sm text-slate-500">Nenhuma transação no período.</p>
+              ) : (
+                displayedTransactions.map((t: any) => (
+                  <div key={t.id} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-default">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className={`p-2 rounded-full shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                        {t.type === 'income' ? <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" /> : <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />}
+                      </div>
+                      
+                      <div className="min-w-0"> 
+                        <p className="font-medium truncate max-w-[150px] sm:max-w-xs text-slate-900">{t.description || "Sem descrição"}</p>
+                        <p className="text-xs sm:text-sm text-slate-500">
+                          {t.category} • {format(new Date(t.transaction_date), 'dd/MM/yyyy')}
+                        </p>
+                      </div>
                     </div>
                     
-                    <div className="min-w-0"> 
-                      <p className="font-medium truncate max-w-[150px] sm:max-w-xs text-slate-900">{t.description || "Sem descrição"}</p>
-                      <p className="text-xs sm:text-sm text-slate-500">
-                        {t.category} • {format(new Date(t.transaction_date), 'dd/MM/yyyy')}
-                      </p>
+                    <div className={`font-bold text-sm sm:text-base whitespace-nowrap ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                      {t.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(t.amount))}
                     </div>
                   </div>
-                  
-                  <div className={`font-bold text-sm sm:text-base whitespace-nowrap ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                    {t.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(t.amount))}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             
-            <div className="p-4 border-t border-slate-100 flex justify-center bg-slate-50/50">
-              <button className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
-                Ver todas as transações <ChevronDown className="h-4 w-4" />
-              </button>
-            </div>
+            {/* Botão para Expandir / Recolher */}
+            {transactions.length > 5 && (
+              <div className="p-4 border-t border-slate-100 flex justify-center bg-slate-50/50">
+                <button 
+                  onClick={() => setShowAll(!showAll)}
+                  className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  {showAll ? (
+                    <>Ver menos <ChevronUp className="h-4 w-4" /></>
+                  ) : (
+                    <>Ver todas as transações ({transactions.length}) <ChevronDown className="h-4 w-4" /></>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,9 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Sun, Moon } from "lucide-react";
-import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
 const navItems = [
   { name: "Visão Geral", href: "/dashboard" },
@@ -15,7 +12,6 @@ const navItems = [
 
 export function TopNav() {
   const location = useLocation();
-  const { theme, setTheme } = useTheme();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
@@ -54,17 +50,8 @@ export function TopNav() {
           })}
         </nav>
 
-        {/* Theme Toggle - Right */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="rounded-full"
-        >
-          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Alternar tema</span>
-        </Button>
+        {/* Right Area - Espaço vazio para manter o equilíbrio do layout (justify-between) */}
+        <div className="w-10" /> 
       </div>
     </header>
   );

@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { 
   Wallet, TrendingUp, TrendingDown, ArrowRight, Receipt, 
-  Heart, Droplets, Moon, GraduationCap, Calendar, CheckCircle2,
-  Calendar as CalendarIcon
+  Heart, Droplets, Moon, GraduationCap, Calendar, CheckCircle2
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Label } from 'recharts';
 import { motion } from 'framer-motion';
@@ -12,6 +11,7 @@ import { ptBR } from "date-fns/locale";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { sql } from "@/lib/neon"; 
+import { DateRangeSelector, DateRange, getDefaultDateRange } from "@/components/ui/date-range-selector";
 
 // --- CORES PADRONIZADAS ---
 const PIE_COLORS = [
@@ -26,6 +26,9 @@ const PIE_COLORS = [
 export default function Dashboard() {
   const { user } = useAuth();
   
+  // Estado do Seletor de Data (Padrão: Últimos 30 dias)
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30));
+
   // Estado para dados reais
   const [metrics, setMetrics] = useState({
     balance: 0,
@@ -33,14 +36,14 @@ export default function Dashboard() {
     expenses: 0,
     waterToday: 0,
     sleepLast: 0,
-    academicCount: 0, // Total simples
+    academicCount: 0, 
     eventsNext: 0,
     eventsSynced: 0
   });
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<any[]>([]);
-  const [academicDistribution, setAcademicDistribution] = useState<any[]>([]); // Novo estado para o gráfico
+  const [academicDistribution, setAcademicDistribution] = useState<any[]>([]);
 
   // Metas (Hardcoded por enquanto)
   const waterGoal = 2500;
@@ -50,13 +53,24 @@ export default function Dashboard() {
     async function fetchOverview() {
       if (!user) return;
       try {
-        // 1. Finanças
-        const financeRes = await sql`SELECT type, amount, category, description, transaction_date FROM finances WHERE user_id = ${user.id} ORDER BY transaction_date DESC`;
+        // Formatar datas para o SQL
+        const startDate = format(dateRange.from, "yyyy-MM-dd");
+        const endDate = format(dateRange.to, "yyyy-MM-dd");
+
+        // 1. Finanças (Filtrado pelo Range)
+        const financeRes = await sql`
+            SELECT type, amount, category, description, transaction_date 
+            FROM finances 
+            WHERE user_id = ${user.id} 
+            AND transaction_date >= ${startDate} 
+            AND transaction_date <= ${endDate}
+            ORDER BY transaction_date DESC
+        `;
         
         const income = financeRes.filter((f:any) => f.type === 'income').reduce((acc:number, curr:any) => acc + Number(curr.amount), 0);
         const expenses = financeRes.filter((f:any) => f.type === 'expense').reduce((acc:number, curr:any) => acc + Number(curr.amount), 0);
         
-        // Agrupar despesas
+        // Agrupar despesas para o gráfico (Filtrado pelo Range)
         const catMap = new Map();
         financeRes.filter((f:any) => f.type === 'expense').forEach((f:any) => {
             const current = catMap.get(f.category) || 0;
@@ -64,7 +78,7 @@ export default function Dashboard() {
         });
         const categoriesChart = Array.from(catMap.entries()).map(([name, value]) => ({ name, value }));
 
-        // 2. Saúde
+        // 2. Saúde (Mantém "Hoje" e "Último" independente do filtro, pois é estado atual)
         const todayStr = new Date().toISOString().split('T')[0];
         const waterRes = await sql`SELECT value FROM health WHERE user_id = ${user.id} AND category = 'agua' AND calendario::date = ${todayStr}::date`;
         const waterToday = waterRes.reduce((acc:number, curr:any) => acc + Number(curr.value), 0);
@@ -72,24 +86,25 @@ export default function Dashboard() {
         const sleepRes = await sql`SELECT value FROM health WHERE user_id = ${user.id} AND category = 'sono' ORDER BY calendario DESC LIMIT 1`;
         const sleepLast = sleepRes.length ? Number(sleepRes[0].value) : 0;
 
-        // 3. Acadêmico (AGORA COM DISTRIBUIÇÃO CORRETA)
+        // 3. Acadêmico (Filtrado pelo Range: documentos criados neste período)
         const academicRes = await sql`
           SELECT tags, COUNT(*) as count 
           FROM academic 
           WHERE user_id = ${user.id} 
+          AND created_at >= ${startDate} 
+          AND created_at <= ${endDate}
           GROUP BY tags
         `;
         
-        // Transforma a resposta do banco no formato do Recharts
         const academicChartData = academicRes.map((item: any, index: number) => ({
-          name: item.tags || 'Geral', // Se a tag for nula, chama de Geral
+          name: item.tags || 'Geral',
           value: Number(item.count),
-          fill: PIE_COLORS[index % PIE_COLORS.length] // Atribui uma cor da paleta
+          fill: PIE_COLORS[index % PIE_COLORS.length]
         }));
 
         const totalAcademic = academicChartData.reduce((acc: number, curr: any) => acc + curr.value, 0);
 
-        // 4. Agenda
+        // 4. Agenda (Futuro Próximo - Mantém independente do filtro histórico)
         const eventsRes = await sql`SELECT * FROM agendamento WHERE user_id = ${user.id} AND start_time > NOW() ORDER BY start_time ASC LIMIT 3`;
         const eventsSyncedCountRes = await sql`SELECT count(*) as total FROM agendamento WHERE user_id = ${user.id} AND google_event_id IS NOT NULL`;
 
@@ -106,23 +121,23 @@ export default function Dashboard() {
 
         setTransactions(financeRes.slice(0, 5));
         setExpenseCategories(categoriesChart);
-        setAcademicDistribution(academicChartData); // Salva a distribuição
+        setAcademicDistribution(academicChartData);
 
       } catch (err) {
         console.error("Erro ao carregar dashboard:", err);
       }
     }
     fetchOverview();
-  }, [user]);
+  }, [user, dateRange]); // Recarrega sempre que o dateRange mudar
 
   const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
   const waterPct = Math.min((metrics.waterToday / waterGoal) * 100, 100);
   const sleepPct = Math.min((metrics.sleepLast / sleepGoal) * 100, 100);
 
-  // Fallback para gráfico vazio não quebrar o layout
+  // Fallback para gráfico vazio
   const chartDataSafe = academicDistribution.length > 0 
     ? academicDistribution 
-    : [{ name: 'Vazio', value: 1, fill: '#e2e8f0' }]; // Cinza claro se vazio
+    : [{ name: 'Vazio', value: 1, fill: '#e2e8f0' }];
 
   return (
     <DashboardLayout>
@@ -141,10 +156,8 @@ export default function Dashboard() {
             </p>
           </div>
           
-          <div className="w-[260px] flex items-center justify-start text-left font-normal px-4 py-2 bg-white border border-slate-200 rounded-md text-slate-500 shadow-sm hover:bg-slate-50 transition-colors cursor-pointer">
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            <span>Visão Geral</span>
-          </div>
+          {/* SELETOR DE DATA RESTAURADO */}
+          <DateRangeSelector value={dateRange} onChange={setDateRange} />
         </motion.div>
 
         {/* --- SEÇÃO 1: FINANÇAS --- */}
@@ -171,7 +184,7 @@ export default function Dashboard() {
             </div>
 
             <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-blue-50 to-blue-50/50 border border-blue-100">
-              <p className="text-sm text-slate-500 mb-1">Saldo atual</p>
+              <p className="text-sm text-slate-500 mb-1">Saldo atual (no período)</p>
               <p className={`text-3xl font-bold ${metrics.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(metrics.balance)}
               </p>
@@ -228,7 +241,7 @@ export default function Dashboard() {
 
               <div className="space-y-2 overflow-y-auto max-h-48 custom-scrollbar">
                 {expenseCategories.length === 0 ? (
-                  <p className="text-sm text-muted-foreground mt-4">Sem dados</p>
+                  <p className="text-sm text-muted-foreground mt-4">Sem dados no período</p>
                 ) : (
                   expenseCategories.map((item, index) => (
                     <div key={item.name} className="flex items-center justify-between text-sm">
@@ -259,12 +272,13 @@ export default function Dashboard() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
                   <Receipt className="h-5 w-5 text-blue-600" />
                 </div>
-                <h3 className="font-semibold text-lg">Últimas Transações</h3>
+                <h3 className="font-semibold text-lg">Transações Recentes</h3>
               </div>
             </div>
 
             <div className="space-y-3">
-              {transactions.map((tx, idx) => (
+              {transactions.length === 0 ? <p className="text-sm text-slate-400">Nenhuma transação no período.</p> :
+              transactions.map((tx, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate text-slate-900">{tx.description || tx.category}</p>
@@ -327,7 +341,7 @@ export default function Dashboard() {
             </div>
           </motion.div>
 
-          {/* CARD 5: Acadêmico (AGORA COM VISUAL RESTAURADO) */}
+          {/* CARD 5: Acadêmico */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
             className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:border-blue-300 group cursor-pointer relative overflow-hidden"
@@ -339,7 +353,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg leading-tight">Acadêmico</h3>
-                  <p className="text-xs text-slate-500">Documentos</p>
+                  <p className="text-xs text-slate-500">Documentos do Período</p>
                 </div>
               </div>
             </div>
@@ -376,7 +390,7 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
 
-              {/* Lado Direito: Legenda (Restaurada) */}
+              {/* Lado Direito: Legenda */}
               <div className="flex flex-col justify-center gap-2 pr-2 overflow-y-auto max-h-[160px] custom-scrollbar">
                   {academicDistribution.length === 0 ? (
                     <p className="text-xs text-slate-400 text-center">Nenhum documento.</p>
