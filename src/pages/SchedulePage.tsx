@@ -10,7 +10,7 @@ import { ptBR } from "date-fns/locale";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { sql } from "@/lib/neon";
-import { EventsList } from "@/components/schedule/EventsList"; // Importando o componente
+import { EventsList } from "@/components/schedule/EventsList"; // Importando a lista corrigida
 
 export default function SchedulePage() {
   const { user } = useAuth();
@@ -21,7 +21,6 @@ export default function SchedulePage() {
     async function fetchData() {
         if (!user) return;
         try {
-            // Buscando eventos futuros
             const res = await sql`
                 SELECT * FROM agendamento 
                 WHERE user_id = ${user.id} 
@@ -44,7 +43,7 @@ export default function SchedulePage() {
   // Próximos eventos (limite 3)
   const upcomingEvents = events.filter(e => new Date(e.start_time) > new Date()).slice(0, 3);
 
-  // Mock visual do Calendário (Dias 1-31)
+  // Mock visual do Calendário
   const calendarDays = Array.from({ length: 31 }, (_, i) => i + 1);
   const startOffset = 3; 
 
@@ -76,7 +75,6 @@ export default function SchedulePage() {
 
         {/* --- METRICS ROW --- */}
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
-          {/* Total Agenda */}
           <motion.div 
             className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-violet-300 transition-colors"
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
@@ -90,7 +88,6 @@ export default function SchedulePage() {
             </div>
           </motion.div>
 
-          {/* Eventos Hoje */}
           <motion.div 
             className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-orange-300 transition-colors"
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}
@@ -104,7 +101,6 @@ export default function SchedulePage() {
             </div>
           </motion.div>
 
-          {/* Sincronizados */}
           <motion.div 
             className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-green-300 transition-colors"
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }}
@@ -155,7 +151,6 @@ export default function SchedulePage() {
         {/* --- MAIN GRID (Calendar + Details) --- */}
         <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
           
-          {/* Mock Visual Calendar */}
           <motion.div
             className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 flex justify-center h-fit shadow-sm"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
@@ -195,7 +190,6 @@ export default function SchedulePage() {
             </div>
           </motion.div>
 
-          {/* Events List (Right Column) - CORRIGIDO para usar o componente */}
           <motion.div
             className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 lg:col-span-2 overflow-hidden shadow-sm"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
@@ -205,7 +199,7 @@ export default function SchedulePage() {
               Eventos selecionados ({format(selectedDate, "dd/MM")})
             </h3>
             
-            {/* Aqui usamos a lista dinâmica selectedEvents */}
+            {/* Aqui usamos a lista dinâmica selectedEvents com a limpeza de texto */}
             <EventsList events={selectedEvents} />
             
           </motion.div>

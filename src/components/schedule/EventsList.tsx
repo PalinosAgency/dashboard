@@ -33,9 +33,10 @@ export function EventsList({ events }: EventsListProps) {
         const endTime = event.end_time ? new Date(event.end_time) : null;
         const isSynced = !!event.google_event_id;
 
-        // CORREÇÃO: Remove o texto automático da descrição
+        // CORREÇÃO: Regex para remover o texto independente de maiúsculas/minúsculas
+        // /gi = g (global) i (ignore case)
         const cleanDescription = event.description
-          ?.replace("Agendado Via Assistente Palinos", "")
+          ?.replace(/Agendado\s+via\s+Assistente\s+Palinos/gi, "")
           .trim();
 
         return (
@@ -68,7 +69,7 @@ export function EventsList({ events }: EventsListProps) {
                 </span>
               </div>
 
-              {/* CORREÇÃO: Só exibe se houver descrição limpa */}
+              {/* Só exibe se sobrou algo na descrição após a limpeza */}
               {cleanDescription && (
                 <p className="mt-2 text-sm text-muted-foreground line-clamp-2 bg-secondary/50 p-2 rounded-lg">
                   {cleanDescription}
