@@ -33,12 +33,17 @@ export function EventsList({ events }: EventsListProps) {
         const endTime = event.end_time ? new Date(event.end_time) : null;
         const isSynced = !!event.google_event_id;
 
+        // CORREÇÃO: Remove o texto automático da descrição
+        const cleanDescription = event.description
+          ?.replace("Agendado Via Assistente Palinos", "")
+          .trim();
+
         return (
           <div
             key={event.id}
             className={cn(
               "group flex items-start gap-4 rounded-xl border p-4 transition-all hover:shadow-sm",
-              "bg-card border-l-4 border-l-purple-500"
+              "bg-card border-l-4 border-l-purple-500 bg-white"
             )}
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
@@ -63,9 +68,10 @@ export function EventsList({ events }: EventsListProps) {
                 </span>
               </div>
 
-              {event.description && (
+              {/* CORREÇÃO: Só exibe se houver descrição limpa */}
+              {cleanDescription && (
                 <p className="mt-2 text-sm text-muted-foreground line-clamp-2 bg-secondary/50 p-2 rounded-lg">
-                  {event.description}
+                  {cleanDescription}
                 </p>
               )}
             </div>
