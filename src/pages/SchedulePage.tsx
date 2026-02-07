@@ -10,6 +10,7 @@ import { ptBR } from "date-fns/locale";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { sql } from "@/lib/neon";
+import { EventsList } from "@/components/schedule/EventsList"; // Importando o componente
 
 export default function SchedulePage() {
   const { user } = useAuth();
@@ -131,26 +132,30 @@ export default function SchedulePage() {
           </div>
 
           <div className="space-y-3">
-            {upcomingEvents.map((event) => (
-              <div key={event.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-100">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate text-slate-900">{event.title}</p>
-                  <p className="text-xs text-slate-500">
-                    {format(new Date(event.start_time), "dd 'de' MMM 'às' HH:mm", { locale: ptBR })}
-                  </p>
+            {upcomingEvents.length === 0 ? (
+                <p className="text-sm text-slate-400">Nenhum compromisso próximo.</p>
+            ) : (
+                upcomingEvents.map((event) => (
+                <div key={event.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-100">
+                    <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-slate-900">{event.title}</p>
+                    <p className="text-xs text-slate-500">
+                        {format(new Date(event.start_time), "dd 'de' MMM 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                    </div>
+                    {event.google_event_id && (
+                    <CheckCircle className="h-4 w-4 text-green-500 ml-2" />
+                    )}
                 </div>
-                {event.google_event_id && (
-                  <CheckCircle className="h-4 w-4 text-green-500 ml-2" />
-                )}
-              </div>
-            ))}
+                ))
+            )}
           </div>
         </motion.div>
 
         {/* --- MAIN GRID (Calendar + Details) --- */}
         <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
           
-          {/* Mock Visual Calendar - Mantido Mock para visual, funcionalidade futura */}
+          {/* Mock Visual Calendar */}
           <motion.div
             className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 flex justify-center h-fit shadow-sm"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
@@ -168,7 +173,7 @@ export default function SchedulePage() {
               <div className="grid grid-cols-7 gap-1 text-center text-sm">
                   {Array.from({length: startOffset}).map((_, i) => <div key={`empty-${i}`} />)}
                   {calendarDays.map((day) => {
-                      const isSelected = day === selectedDate.getDate(); // Simples seleção visual
+                      const isSelected = day === selectedDate.getDate();
                       return (
                           <div 
                              key={day} 
@@ -190,53 +195,19 @@ export default function SchedulePage() {
             </div>
           </motion.div>
 
-          {/* Events List (Right Column) */}
+          {/* Events List (Right Column) - CORRIGIDO para usar o componente */}
           <motion.div
             className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 lg:col-span-2 overflow-hidden shadow-sm"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           >
             <h3 className="mb-4 text-lg font-semibold flex items-center gap-2 text-slate-900">
               <div className="w-1.5 h-6 bg-violet-500 rounded-full"></div>
-              Eventos selecionados
+              Eventos selecionados ({format(selectedDate, "dd/MM")})
             </h3>
             
-            <div className="space-y-3">
-              {events.slice(0, 5).map((event) => ( // Mostrando os primeiros 5 por padrão já que o calendário é mock
-                <div
-                  key={event.id}
-                  className="group flex items-start gap-4 rounded-xl border border-slate-200 p-4 transition-all hover:shadow-sm bg-white border-l-4 border-l-violet-500"
-                >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
-                    <CalendarIcon className="h-6 w-6" />
-                  </div>
-                  
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="truncate font-semibold text-slate-900">{event.title}</h4>
-                      {event.google_event_id && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700">
-                          <Cloud className="h-3 w-3" /> Sync
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                      <Clock className="h-4 w-4" />
-                      <span className="font-medium">
-                        {format(new Date(event.start_time), "HH:mm")} - {format(new Date(event.end_time), "HH:mm")}
-                      </span>
-                      <span>({format(new Date(event.start_time), "dd/MM")})</span>
-                    </div>
-
-                    {event.description && (
-                      <p className="mt-2 text-sm text-slate-500 line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        {event.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Aqui usamos a lista dinâmica selectedEvents */}
+            <EventsList events={selectedEvents} />
+            
           </motion.div>
         </div>
       </div>
