@@ -13,8 +13,8 @@ import { format } from "date-fns";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { sql } from "@/lib/neon";
 import { DateRangeSelector, DateRange, getDefaultDateRange } from "@/components/ui/date-range-selector";
+import { useQuery } from '@tanstack/react-query';
 
 // --- CORES ---
 const PIE_COLORS = [
@@ -25,69 +25,54 @@ const PIE_COLORS = [
 export default function FinancesPage() {
   const { user } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30));
-  const [loading, setLoading] = useState(true);
   
   // Estado para controlar a exibição da lista ("Ver todas")
   const [showAll, setShowAll] = useState(false);
 
-  const [metrics, setMetrics] = useState({ income: 0, expenses: 0, balance: 0 });
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [pieData, setPieData] = useState<any[]>([]);
-  const [barData, setBarData] = useState<any[]>([]);
-
   const formatCurrency = (val: number) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
-  useEffect(() => {
-    async function fetchData() {
-        if (!user) return;
-        setLoading(true);
-        try {
-            const startDate = format(dateRange.from, "yyyy-MM-dd");
-            const endDate = format(dateRange.to, "yyyy-MM-dd");
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['finances', dateRange],
+    queryFn: async () => {
+        const startDate = format(dateRange.from || new Date(), "yyyy-MM-dd");
+        const endDate = format(dateRange.to || new Date(), "yyyy-MM-dd");
+        const token = window.localStorage.getItem("auth_token_temp") || "";
+        
+        const res = await fetch(`/api/finances?start=${startDate}&end=${endDate}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Failed to fetch finances");
+        return res.json();
+    },
+    enabled: !!user
+  });
 
-            const res = await sql`
-                SELECT * FROM finances 
-                WHERE user_id = ${user.id} 
-                AND transaction_date >= ${startDate} 
-                AND transaction_date <= ${endDate}
-                ORDER BY transaction_date DESC
-            `;
+  const transactions = data?.transactions || [];
+  const metrics = { 
+    income: data?.summary?.income || 0, 
+    expenses: data?.summary?.expenses || 0, 
+    balance: (data?.summary?.income || 0) - (data?.summary?.expenses || 0) 
+  };
 
-            // Totais
-            const inc = res.filter((t:any) => t.type === 'income').reduce((acc:number, t:any) => acc + Number(t.amount), 0);
-            const exp = res.filter((t:any) => t.type === 'expense').reduce((acc:number, t:any) => acc + Number(t.amount), 0);
-            
-            // Pizza (Categorias)
-            const catMap = new Map();
-            res.filter((t:any) => t.type === 'expense').forEach((t:any) => {
-                catMap.set(t.category, (catMap.get(t.category) || 0) + Number(t.amount));
-            });
-            const pieChart = Array.from(catMap.entries()).map(([name, value]) => ({ name, value }));
+  // Montar gráficos derivados das transações
+  const pieData = Array.from(
+    transactions.filter((t:any) => t.type === 'expense').reduce((catMap, t) => {
+      catMap.set(t.category, (catMap.get(t.category) || 0) + Number(t.amount));
+      return catMap;
+    }, new Map<string, number>()).entries()
+  ).map(([name, value]) => ({ name, value }));
 
-            // Barras (Fluxo Diário)
-            const dayMap = new Map();
-            res.forEach((t:any) => {
-                const day = format(new Date(t.transaction_date), 'dd/MM');
-                if (!dayMap.has(day)) dayMap.set(day, { dateLabel: day, income: 0, expense: 0 });
-                const entry = dayMap.get(day);
-                if (t.type === 'income') entry.income += Number(t.amount);
-                else entry.expense += Number(t.amount);
-            });
-            const barChart = Array.from(dayMap.values()).reverse(); // Reverter para ordem cronológica se o SQL vier DESC
+  const barData = Array.from(
+    transactions.reduce((dayMap, t) => {
+      const day = format(new Date(t.transaction_date), 'dd/MM');
+      if (!dayMap.has(day)) dayMap.set(day, { dateLabel: day, income: 0, expense: 0 });
+      const entry = dayMap.get(day);
+      if (t.type === 'income') entry.income += Number(t.amount);
+      else entry.expense += Number(t.amount);
+      return dayMap;
+    }, new Map<string, any>()).values()
+  ).reverse() as any[];
 
-            setMetrics({ income: inc, expenses: exp, balance: inc - exp });
-            setTransactions(res);
-            setPieData(pieChart);
-            setBarData(barChart);
-
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }
-    fetchData();
-  }, [user, dateRange]);
 
   // Define quais transações serão exibidas com base no estado 'showAll'
   const displayedTransactions = showAll ? transactions : transactions.slice(0, 5);

@@ -9,28 +9,28 @@ import { ptBR } from "date-fns/locale";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { sql } from "@/lib/neon";
+import { Calendar } from "@/components/ui/calendar";
+import { useQuery } from '@tanstack/react-query';
 import { EventsList } from "@/components/schedule/EventsList"; // Importando a lista corrigida
 
 export default function SchedulePage() {
   const { user } = useAuth();
-  const [events, setEvents] = useState<any[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  useEffect(() => {
-    async function fetchData() {
-        if (!user) return;
-        try {
-            const res = await sql`
-                SELECT * FROM agendamento 
-                WHERE user_id = ${user.id} 
-                ORDER BY start_time ASC
-            `;
-            setEvents(res);
-        } catch (e) { console.error(e); }
-    }
-    fetchData();
-  }, [user]);
+  const { data: eventsData, isLoading } = useQuery({
+    queryKey: ['schedule'],
+    queryFn: async () => {
+        const token = window.localStorage.getItem("auth_token_temp") || "";
+        const res = await fetch(`/api/schedule`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Failed to fetch schedule data");
+        return res.json();
+    },
+    enabled: !!user
+  });
+  
+  const events = eventsData?.events || [];
 
   // Filtros de dados
   const eventsCount = events.length;
@@ -43,9 +43,7 @@ export default function SchedulePage() {
   // Próximos eventos (limite 3)
   const upcomingEvents = events.filter(e => new Date(e.start_time) > new Date()).slice(0, 3);
 
-  // Mock visual do Calendário
-  const calendarDays = Array.from({ length: 31 }, (_, i) => i + 1);
-  const startOffset = 3; 
+
 
   return (
     <DashboardLayout>
@@ -155,38 +153,13 @@ export default function SchedulePage() {
             className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 flex justify-center h-fit shadow-sm"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           >
-            <div className="w-full max-w-[300px]">
-              <div className="flex items-center justify-between mb-4">
-                  <button className="p-1 hover:bg-slate-100 rounded-md"><ChevronLeft className="h-4 w-4 text-slate-500"/></button>
-                  <span className="text-sm font-medium text-slate-900">Janeiro 2026</span>
-                  <button className="p-1 hover:bg-slate-100 rounded-md"><ChevronRight className="h-4 w-4 text-slate-500"/></button>
-              </div>
-              
-              <div className="grid grid-cols-7 gap-1 text-center text-xs mb-2 text-slate-400">
-                  <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
-              </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-sm">
-                  {Array.from({length: startOffset}).map((_, i) => <div key={`empty-${i}`} />)}
-                  {calendarDays.map((day) => {
-                      const isSelected = day === selectedDate.getDate();
-                      return (
-                          <div 
-                             key={day} 
-                             onClick={() => {
-                                 const newDate = new Date();
-                                 newDate.setDate(day);
-                                 setSelectedDate(newDate);
-                             }}
-                             className={`
-                               h-9 w-9 flex items-center justify-center rounded-md cursor-pointer transition-colors
-                               ${isSelected ? 'bg-violet-600 text-white shadow-md shadow-violet-200' : 'hover:bg-slate-100 text-slate-700'}
-                             `}
-                          >
-                              {day}
-                          </div>
-                      );
-                  })}
-              </div>
+            <div className="w-full flex justify-center">
+              <Calendar 
+                mode="single"
+                selected={selectedDate}
+                onSelect={(day: Date | undefined) => day && setSelectedDate(day)}
+                className="rounded-md"
+              />
             </div>
           </motion.div>
 

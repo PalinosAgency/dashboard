@@ -49,7 +49,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
         <Calendar
           initialFocus
           mode="range"
-          defaultMonth={value?.from}
+          defaultMonth={value?.from || new Date()}
           selected={{ from: value.from, to: value.to }}
           onSelect={(range) => {
             if (range?.from && range?.to) {

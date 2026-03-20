@@ -4,7 +4,7 @@ import { FileText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 // REMOVIDO: import { supabase } ...
-import { sql } from "@/lib/neon"; // ADICIONADO: Neon
+// import { sql } from "@/lib/neon"; // Removido por segurança
 import { useToast } from "@/hooks/use-toast";
 
 interface Document {
@@ -51,12 +51,12 @@ export function DocumentList({ documents, onRefresh }: DocumentListProps) {
     if (!user) return;
 
     try {
-      // ATUALIZADO PARA NEON (SQL)
-      await sql`
-        DELETE FROM academic 
-        WHERE id = ${id} 
-        AND user_id = ${user.id}
-      `;
+      const token = window.localStorage.getItem("auth_token_temp") || "";
+      const res = await fetch(`/api/academic?id=${id}`, {
+          method: "DELETE",
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed");
 
       toast({ title: "Documento removido" });
       onRefresh();

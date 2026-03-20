@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { sql } from "@/lib/neon"; // Usando Neon para manter consistência com o resto do projeto
+// import { sql } from "@/lib/neon"; // Removido por segurança
 
 const categories = [
   { value: "Agua", label: "Água", icon: "💧", defaultUnit: "ml" },
@@ -47,19 +47,23 @@ export function AddHealthDialog({ open, onOpenChange, onSuccess }: AddHealthDial
 
     setLoading(true);
     try {
-      // Inserção usando SQL (Neon)
-      await sql`
-        INSERT INTO health (user_id, category, value, item, description, unit, calendario)
-        VALUES (
-          ${user.id}, 
-          ${category}, 
-          ${parseFloat(value) || 0}, 
-          ${category === "Treino" ? item : null}, 
-          ${description || null},
-          ${unit},
-          ${new Date(date).toISOString()}
-        )
-      `;
+      const token = window.localStorage.getItem("auth_token_temp") || "";
+      const res = await fetch("/api/health", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          category,
+          value: parseFloat(value) || 0,
+          item: category === "Treino" ? item : null,
+          description: description || null,
+          unit,
+          calendario: new Date(date).toISOString()
+        })
+      });
+      if (!res.ok) throw new Error("Failed");
 
       toast({ title: "Sucesso!", description: "Registro adicionado." });
       onSuccess();

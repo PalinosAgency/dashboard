@@ -10,7 +10,6 @@ import { ptBR } from "date-fns/locale";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { sql } from "@/lib/neon"; 
 import { DateRangeSelector, DateRange, getDefaultDateRange } from "@/components/ui/date-range-selector";
 
 // --- CORES PADRONIZADAS ---
@@ -53,24 +52,23 @@ export default function Dashboard() {
     async function fetchOverview() {
       if (!user) return;
       try {
-        // Formatar datas para o SQL
-        const startDate = format(dateRange.from, "yyyy-MM-dd");
-        const endDate = format(dateRange.to, "yyyy-MM-dd");
-
-        // 1. Finanças (Filtrado pelo Range)
-        const financeRes = await sql`
-            SELECT type, amount, category, description, transaction_date 
-            FROM finances 
-            WHERE user_id = ${user.id} 
-            AND transaction_date >= ${startDate} 
-            AND transaction_date <= ${endDate}
-            ORDER BY transaction_date DESC
-        `;
+        // Formatar datas
+        const startDate = format(dateRange.from || new Date(), "yyyy-MM-dd");
+        const endDate = format(dateRange.to || new Date(), "yyyy-MM-dd");
         
+        const token = window.localStorage.getItem("auth_token_temp") || "";
+        const res = await fetch(`/api/dashboard?start=${startDate}&end=${endDate}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!res.ok) throw new Error("Falha ao buscar dashboard");
+        const data = await res.json();
+
+        const financeRes = data.finances || [];
         const income = financeRes.filter((f:any) => f.type === 'income').reduce((acc:number, curr:any) => acc + Number(curr.amount), 0);
         const expenses = financeRes.filter((f:any) => f.type === 'expense').reduce((acc:number, curr:any) => acc + Number(curr.amount), 0);
         
-        // Agrupar despesas para o gráfico (Filtrado pelo Range)
+        // Agrupar despesas para o gráfico
         const catMap = new Map();
         financeRes.filter((f:any) => f.type === 'expense').forEach((f:any) => {
             const current = catMap.get(f.category) || 0;
@@ -78,45 +76,23 @@ export default function Dashboard() {
         });
         const categoriesChart = Array.from(catMap.entries()).map(([name, value]) => ({ name, value }));
 
-        // 2. Saúde (Mantém "Hoje" e "Último" independente do filtro, pois é estado atual)
-        const todayStr = new Date().toISOString().split('T')[0];
-        const waterRes = await sql`SELECT value FROM health WHERE user_id = ${user.id} AND category = 'agua' AND calendario::date = ${todayStr}::date`;
-        const waterToday = waterRes.reduce((acc:number, curr:any) => acc + Number(curr.value), 0);
-        
-        const sleepRes = await sql`SELECT value FROM health WHERE user_id = ${user.id} AND category = 'sono' ORDER BY calendario DESC LIMIT 1`;
-        const sleepLast = sleepRes.length ? Number(sleepRes[0].value) : 0;
-
-        // 3. Acadêmico (Filtrado pelo Range: documentos criados neste período)
-        const academicRes = await sql`
-          SELECT tags, COUNT(*) as count 
-          FROM academic 
-          WHERE user_id = ${user.id} 
-          AND created_at >= ${startDate} 
-          AND created_at <= ${endDate}
-          GROUP BY tags
-        `;
-        
+        const academicRes = data.academicGrouped || [];
         const academicChartData = academicRes.map((item: any, index: number) => ({
           name: item.tags || 'Geral',
           value: Number(item.count),
           fill: PIE_COLORS[index % PIE_COLORS.length]
         }));
-
         const totalAcademic = academicChartData.reduce((acc: number, curr: any) => acc + curr.value, 0);
-
-        // 4. Agenda (Futuro Próximo - Mantém independente do filtro histórico)
-        const eventsRes = await sql`SELECT * FROM agendamento WHERE user_id = ${user.id} AND start_time > NOW() ORDER BY start_time ASC LIMIT 3`;
-        const eventsSyncedCountRes = await sql`SELECT count(*) as total FROM agendamento WHERE user_id = ${user.id} AND google_event_id IS NOT NULL`;
 
         setMetrics({
           balance: income - expenses,
           income,
           expenses,
-          waterToday,
-          sleepLast,
+          waterToday: data.health.waterToday || 0,
+          sleepLast: data.health.sleepLast || 0,
           academicCount: totalAcademic,
-          eventsNext: eventsRes.length,
-          eventsSynced: Number(eventsSyncedCountRes[0].total)
+          eventsNext: data.schedule.upcoming.length,
+          eventsSynced: data.schedule.syncedCount
         });
 
         setTransactions(financeRes.slice(0, 5));

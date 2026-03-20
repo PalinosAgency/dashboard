@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { Trash2, BookOpen, GraduationCap, FileText, CalendarCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { sql } from "@/lib/neon";
+// import { sql } from "@/lib/neon"; // Removido por segurança
 import { useToast } from "@/hooks/use-toast";
 
 interface AcademicItem {
@@ -68,11 +68,13 @@ export function AcademicList({ items, onRefresh }: AcademicListProps) {
   const handleDelete = async (id: string) => {
     if (!user) return;
     try {
-      await sql`
-        DELETE FROM academic 
-        WHERE id = ${id} 
-        AND user_id = ${user.id}::integer
-      `;
+      const token = window.localStorage.getItem("auth_token_temp") || "";
+      const res = await fetch(`/api/academic?id=${id}`, {
+          method: "DELETE",
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to delete activity");
+
       toast({ title: "Atividade removida" });
       onRefresh();
     } catch (error: any) {

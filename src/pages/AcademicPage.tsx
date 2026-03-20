@@ -9,12 +9,12 @@ import { ptBR } from "date-fns/locale";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { sql } from "@/lib/neon";
+import { DateRangeSelector, DateRange, getDefaultDateRange } from "@/components/ui/date-range-selector";
+import { useQuery } from '@tanstack/react-query';
 
 export default function AcademicPage() {
   const { user } = useAuth();
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30));
 
   // Configuração Visual dos Tipos
   const typeConfig: any = {
@@ -25,21 +25,27 @@ export default function AcademicPage() {
     default: { label: "Geral", color: "text-slate-600", bg: "bg-slate-100", icon: GraduationCap },
   };
 
-  useEffect(() => {
-    async function fetchData() {
-        if (!user) return;
-        setLoading(true);
-        try {
-            const data = await sql`SELECT * FROM academic WHERE user_id = ${user.id} ORDER BY created_at DESC`;
-            setItems(data.map((d:any) => ({
-                ...d,
-                tag: d.tags ? d.tags.toLowerCase() : 'default' // Garante que a tag bata com o config
-            })));
-        } catch(e) { console.error(e); }
-        finally { setLoading(false); }
-    }
-    fetchData();
-  }, [user]);
+  const { data: qData, isLoading: loading } = useQuery({
+    queryKey: ['academic', dateRange],
+    queryFn: async () => {
+        const startDate = format(dateRange.from || new Date(), "yyyy-MM-dd");
+        const endDate = format(dateRange.to || new Date(), "yyyy-MM-dd");
+        const token = window.localStorage.getItem("auth_token_temp") || "";
+        
+        const res = await fetch(`/api/academic?start=${startDate}&end=${endDate}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Failed to fetch academic data");
+        return res.json();
+    },
+    enabled: !!user
+  });
+
+  const rawItems = qData?.documents || [];
+  const items = rawItems.map((d:any) => ({
+      ...d,
+      tag: d.tags ? d.tags.toLowerCase() : 'default'
+  }));
 
   // Cálculos dinâmicos baseados nos dados
   const totalActivities = items.length;
@@ -87,6 +93,7 @@ export default function AcademicPage() {
               <p className="text-slate-500 mt-1">Planejamento, estudos e provas</p>
             </div>
           </div>
+          <DateRangeSelector value={dateRange} onChange={setDateRange} />
         </motion.div>
 
         {/* --- METRICS ROW --- */}

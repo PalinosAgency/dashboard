@@ -12,108 +12,90 @@ import { format } from "date-fns";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { sql } from "@/lib/neon";
 import { DateRangeSelector, DateRange, getDefaultDateRange } from "@/components/ui/date-range-selector";
+import { useQuery } from '@tanstack/react-query';
 
 export default function HealthPage() {
   const { user } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange(30));
-  const [loading, setLoading] = useState(true);
-
-  // Estados com dados reais
-  const [data, setData] = useState({
-    waterToday: 0,
-    lastSleep: 0,
-    lastWeight: 0,
-    waterHistory: [] as any[],
-    sleepHistory: [] as any[],
-    workoutLog: [] as any[],
-    weightLog: [] as any[],
-  });
 
   const waterGoal = 2500;
   const sleepGoal = 8;
 
-  useEffect(() => {
-    async function fetchData() {
-      if (!user) return;
-      try {
-        setLoading(true);
-        const todayStr = format(new Date(), "yyyy-MM-dd");
-        const startDate = format(dateRange.from, "yyyy-MM-dd");
-        const endDate = format(dateRange.to, "yyyy-MM-dd");
-
-        // 1. Buscando tudo do período
-        const healthData = await sql`
-          SELECT * FROM health 
-          WHERE user_id = ${user.id} 
-          AND calendario >= ${startDate} 
-          AND calendario <= ${endDate}
-          ORDER BY calendario ASC
-        `;
-
-        // 2. Água Hoje
-        const waterTodayRes = await sql`
-            SELECT value FROM health WHERE user_id = ${user.id} 
-            AND category = 'agua' AND calendario::date = ${todayStr}::date
-        `;
-        const waterToday = waterTodayRes.reduce((acc: number, h: any) => acc + Number(h.value), 0);
-
-        // 3. Históricos para Gráficos
-        const waterMap = new Map();
-        const sleepHistory: any[] = [];
+  const { data: qData, isLoading: loading } = useQuery({
+    queryKey: ['health', dateRange],
+    queryFn: async () => {
+        const startDate = format(dateRange.from || new Date(), "yyyy-MM-dd");
+        const endDate = format(dateRange.to || new Date(), "yyyy-MM-dd");
+        const token = window.localStorage.getItem("auth_token_temp") || "";
         
-        healthData.forEach((h: any) => {
-           const d = format(new Date(h.calendario), 'dd/MM');
-           if (h.category === 'agua') {
-               waterMap.set(d, (waterMap.get(d) || 0) + Number(h.value));
-           } else if (h.category === 'sono') {
-               sleepHistory.push({ day: d, value: Number(h.value) });
-           }
+        const res = await fetch(`/api/health?start=${startDate}&end=${endDate}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        const waterHistory = Array.from(waterMap.entries()).map(([day, value]) => ({ day, value }));
+        if (!res.ok) throw new Error("Failed to fetch health data");
+        return res.json();
+    },
+    enabled: !!user
+  });
 
-        // 4. Últimos Registros (Fora do range se necessário)
-        const lastSleepRes = await sql`SELECT value FROM health WHERE user_id = ${user.id} AND category = 'sono' ORDER BY calendario DESC LIMIT 1`;
-        const lastWeightRes = await sql`SELECT value FROM health WHERE user_id = ${user.id} AND category = 'peso' ORDER BY calendario DESC LIMIT 1`;
+  const healthData = qData?.logs || [];
+  const todayStr = new Date().toISOString().split('T')[0];
 
-        // 5. Logs detalhados
-        const workoutLog = healthData
-          .filter((h: any) => h.category === 'treino')
-          .map((h: any) => ({
-             id: h.id,
-             item: h.item || "Treino",
-             description: h.description,
-             value: Number(h.value),
-             unit: h.unit || "min",
-             date: format(new Date(h.calendario), 'dd/MM')
-          })).reverse();
+  // Derive metrics
+  const waterToday = healthData
+    .filter((h: any) => h.category === 'agua' && h.calendario.split('T')[0] === todayStr)
+    .reduce((acc: number, h: any) => acc + Number(h.value), 0);
 
-        const weightLog = healthData
-          .filter((h: any) => h.category === 'peso')
-          .map((h: any) => ({
-             value: Number(h.value),
-             date: format(new Date(h.calendario), 'yyyy-MM-dd')
-          })).reverse();
+  const lastSleepObj = healthData.find((h: any) => h.category === 'sono');
+  const lastWeightObj = healthData.find((h: any) => h.category === 'peso');
+  
+  const lastSleep = lastSleepObj ? Number(lastSleepObj.value) : 0;
+  const lastWeight = lastWeightObj ? Number(lastWeightObj.value) : 0;
 
-        setData({
-            waterToday,
-            lastSleep: lastSleepRes.length ? Number(lastSleepRes[0].value) : 0,
-            lastWeight: lastWeightRes.length ? Number(lastWeightRes[0].value) : 0,
-            waterHistory,
-            sleepHistory,
-            workoutLog,
-            weightLog
-        });
+  const waterMap = new Map();
+  const sleepHistory: any[] = [];
+  
+  // Como a query retorna DESC, revertemos para o gráfico ir do mais antigo ao mais novo
+  const sortedData = [...healthData].reverse();
+  
+  sortedData.forEach((h: any) => {
+     const d = format(new Date(h.calendario), 'dd/MM');
+     if (h.category === 'agua') {
+         waterMap.set(d, (waterMap.get(d) || 0) + Number(h.value));
+     } else if (h.category === 'sono') {
+         sleepHistory.push({ day: d, value: Number(h.value) });
+     }
+  });
+  
+  const waterHistory = Array.from(waterMap.entries()).map(([day, value]) => ({ day, value }));
 
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, [user, dateRange]);
+  const workoutLog = healthData
+    .filter((h: any) => h.category === 'treino')
+    .map((h: any) => ({
+       id: h.id,
+       item: h.item || "Treino",
+       description: h.description,
+       value: Number(h.value),
+       unit: h.unit || "min",
+       date: format(new Date(h.calendario), 'dd/MM')
+    })); // Já em ordem DESC por causa da API
+
+  const weightLog = healthData
+    .filter((h: any) => h.category === 'peso')
+    .map((h: any) => ({
+       value: Number(h.value),
+       date: format(new Date(h.calendario), 'yyyy-MM-dd')
+    }));
+
+  const data = {
+    waterToday: waterToday || 0,
+    lastSleep,
+    lastWeight,
+    waterHistory,
+    sleepHistory,
+    workoutLog,
+    weightLog
+  };
 
   const waterPercentage = (data.waterToday / waterGoal) * 100;
 
