@@ -1,4 +1,4 @@
-import { sql } from './db';
+import { sql } from './db.js';
 
 export async function authenticate(req: any) {
   const authHeader = req.headers.authorization;

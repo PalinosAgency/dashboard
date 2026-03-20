@@ -1,5 +1,5 @@
-import { sql } from './_lib/db';
-import { authenticate } from './_lib/auth';
+import { sql } from './_lib/db.js';
+import { authenticate } from './_lib/auth.js';
 
 export default async function handler(req: any, res: any) {
   try {
